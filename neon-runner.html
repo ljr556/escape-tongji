@@ -153,6 +153,16 @@
 
   .wallet{font-size:16px;font-weight:800;color:#ffd93b;margin:8px 0 2px;}
   .shoptabs{display:flex;gap:8px;justify-content:center;margin:14px 0;}
+  .namerow{display:flex;justify-content:center;margin:14px 0 2px;}
+  #nameInput{
+    font:inherit;font-size:14px;text-align:center;width:min(240px,80%);
+    padding:10px 14px;border-radius:999px;color:#eafcff;
+    background:rgba(57,246,255,.08);border:1px solid rgba(57,246,255,.3);outline:none;
+  }
+  #nameInput::placeholder{color:#7fa8bb;}
+  #nameInput:focus{border-color:rgba(57,246,255,.75);box-shadow:0 0 14px rgba(57,246,255,.25);}
+  .rowme{background:rgba(126,249,255,.12);border-color:rgba(126,249,255,.45);}
+  .rank{flex:0 0 30px;text-align:center;font-weight:800;color:#ffd93b;font-size:14px;}
   .stab{
     font:inherit;font-weight:700;font-size:15px;color:#cfeaff;cursor:pointer;
     padding:8px 22px;border-radius:999px;border:1px solid rgba(57,246,255,.25);background:rgba(57,246,255,.06);
@@ -258,6 +268,18 @@
       <div id="btnPause" class="icon" title="暂停 (P)">❚❚</div>
       <div id="btnSound" class="icon" title="声音 (M)">🔊</div>
       <div id="btnShop" class="icon" title="商城">🛒</div>
+      <div id="btnBoard" class="icon" title="排行榜">🏆</div>
+    </div>
+  </div>
+
+  <div id="boardScreen" class="screen hidden">
+    <div class="card shop-card">
+      <h1 class="title" style="font-size:30px">排行榜</h1>
+      <div class="wallet" id="boardNote">本机记录（配置后端后即为全球榜）</div>
+      <div id="boardList" class="shoplist"></div>
+      <div class="btnrow">
+        <button id="btnBoardClose" class="btn ghost">返回</button>
+      </div>
     </div>
   </div>
 
@@ -294,6 +316,7 @@
       <div class="btnrow">
         <button id="btnStart" class="btn">开始游戏</button>
       </div>
+      <div class="namerow"><input id="nameInput" maxlength="12" placeholder="输入昵称（排行榜用）" autocomplete="off"></div>
       <p class="tip">金币可购买坐骑与翅膀（商城），捡到「龙」可骑龙喷火烧障碍。</p>
       <p class="tip">带着校徽的小奶龙一路狂奔：躲路障、钻无人机、捡金币和护盾。<br>跑得越远速度越快 —— 别撞上去。</p>
       <p class="tip rotate-tip">📱 横过手机玩更爽</p>
@@ -1086,6 +1109,7 @@ function startGame() {
   ui.over.classList.add('hidden');
   ui.pause.classList.add('hidden');
   ui.win.classList.add('hidden');
+  ui.board.classList.add('hidden');
   ui.btnPause.textContent = '❚❚';
   ui.hint.style.opacity = '0';
 }
@@ -1098,6 +1122,7 @@ function finishRun() {
   const score = Math.round((Math.floor(G.dist) + G.coins * 10) * scoreMult());
   const isBest = score > G.best;
   if (isBest) { G.best = score; try { localStorage.setItem('neon-runner-best', String(score)); } catch (e) {} }
+  submitScore({ name: myName() || '匿名', score: score, dist: Math.floor(G.dist), coins: G.coins, diff: save.diff });
   burst(P.x, P.y - 34, 44, 'rgba(255,236,120,.95)', 620, 1.0, 8);
   burst(P.x, P.y - 34, 24, 'rgba(140,240,255,.95)', 480, 0.9, 7);
   setTimeout(() => {
@@ -1127,6 +1152,7 @@ function gameOver() {
     G.best = score;
     try { localStorage.setItem('neon-runner-best', String(score)); } catch (e) {}
   }
+  submitScore({ name: myName() || '匿名', score: score, dist: Math.floor(G.dist), coins: G.coins, diff: save.diff });
 
   setTimeout(() => {
     if (G.state !== 'over') return;
@@ -3143,6 +3169,12 @@ const ui = {
   touch: document.getElementById('touch'),
   shop: document.getElementById('shopScreen'),
   win: document.getElementById('winScreen'),
+  board: document.getElementById('boardScreen'),
+  boardList: document.getElementById('boardList'),
+  boardNote: document.getElementById('boardNote'),
+  btnBoard: document.getElementById('btnBoard'),
+  btnBoardClose: document.getElementById('btnBoardClose'),
+  nameInput: document.getElementById('nameInput'),
   wScore: document.getElementById('wScore'),
   wDist: document.getElementById('wDist'),
   wCoins: document.getElementById('wCoins'),
@@ -3236,6 +3268,80 @@ function openShop() {
 function closeShop() {
   ui.shop.classList.add('hidden');
 }
+
+/* ---------- 排行榜 ---------- */
+// 填入后端地址即可启用「全球榜」；留空则只用本机记录
+const LB_URL = '';
+const LB_KEY = 'neon-runner-board';
+const NAME_KEY = 'neon-runner-name';
+const myName = () => { try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; } };
+const setMyName = (v) => { try { localStorage.setItem(NAME_KEY, String(v || '').slice(0, 12)); } catch (e) {} };
+const localBoard = () => { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch (e) { return []; } };
+function addLocalBoard(e) {
+  const a = localBoard();
+  a.push(e);
+  a.sort((x, y) => (y.score || 0) - (x.score || 0));
+  try { localStorage.setItem(LB_KEY, JSON.stringify(a.slice(0, 20))); } catch (err) {}
+}
+async function submitScore(entry) {
+  addLocalBoard(Object.assign({ me: true }, entry));
+  if (!LB_URL) return;
+  try {
+    await fetch(LB_URL + '/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    });
+  } catch (e) {}
+}
+function boardRow(rank, e) {
+  const row = document.createElement('div');
+  row.className = 'shop-item' + (e.me ? ' rowme' : '');
+  const rk = document.createElement('div');
+  rk.className = 'rank';
+  rk.textContent = '#' + rank;
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const nm = document.createElement('div');
+  nm.className = 'nm';
+  nm.textContent = (e.name || '匿名') + ' · ' + ((DIFFS[e.diff] || DIFFS.normal).name);
+  const st = document.createElement('div');
+  st.className = 'st';
+  st.textContent = (e.dist || 0) + ' m · ' + (e.coins || 0) + ' 金币';
+  meta.appendChild(nm);
+  meta.appendChild(st);
+  const sc = document.createElement('div');
+  sc.className = 'cost';
+  sc.style.cssText = 'font-weight:800;font-size:15px;color:#eafcff';
+  sc.textContent = String(e.score || 0);
+  row.appendChild(rk);
+  row.appendChild(meta);
+  row.appendChild(sc);
+  return row;
+}
+async function openBoard() {
+  if (G.state === 'playing') togglePause(true);
+  ui.boardList.innerHTML = '';
+  ui.boardNote.textContent = LB_URL ? '全球排行榜' : '本机记录（接后端后即为全球榜）';
+  let list = null;
+  if (LB_URL) {
+    try {
+      const r = await fetch(LB_URL + '/top');
+      if (r.ok) list = await r.json();
+    } catch (e) {}
+  }
+  if (!list || !list.length) list = localBoard();
+  if (!list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'shop-item';
+    empty.textContent = '还没有成绩，先去跑一局吧！';
+    ui.boardList.appendChild(empty);
+  } else {
+    list.slice(0, 20).forEach((e, i) => ui.boardList.appendChild(boardRow(i + 1, e)));
+  }
+  ui.board.classList.remove('hidden');
+}
+function closeBoard() { ui.board.classList.add('hidden'); }
 
 /* ============ 循环 ============ */
 const STEP = 1 / 120;
@@ -3387,6 +3493,10 @@ document.addEventListener('contextmenu', (e) => {
 ui.btnSound.addEventListener('click', toggleMute);
 ui.btnPause.addEventListener('click', () => togglePause());
 ui.btnShop.addEventListener('click', openShop);
+ui.btnBoard.addEventListener('click', openBoard);
+ui.btnBoardClose.addEventListener('click', closeBoard);
+ui.nameInput.value = myName();
+ui.nameInput.addEventListener('input', () => setMyName(ui.nameInput.value));
 ui.btnShopClose.addEventListener('click', closeShop);
 ui.btnFire.addEventListener('click', fireFlame);
 ui.btnFire.addEventListener('pointerdown', (e) => e.stopPropagation());
