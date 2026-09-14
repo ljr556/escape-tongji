@@ -740,20 +740,34 @@ function resize() {
 }
 
 function applyTheme() {
-  const th = themeNow();
+  // 换场景时在上一个主题与当前主题之间做 2 秒过渡
+  const cur = themeNow();
+  const prev = THEMES[themeFrom % THEMES.length];
+  const t = clamp(themeMix, 0, 1);
   const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-  sky.addColorStop(0, th.sky[0]);
-  sky.addColorStop(0.45, th.sky[1]);
-  sky.addColorStop(0.78, th.sky[2]);
-  sky.addColorStop(1, th.sky[3]);
+  sky.addColorStop(0, mixHex(prev.sky[0], cur.sky[0], t));
+  sky.addColorStop(0.45, mixHex(prev.sky[1], cur.sky[1], t));
+  sky.addColorStop(0.78, mixHex(prev.sky[2], cur.sky[2], t));
+  sky.addColorStop(1, mixHex(prev.sky[3], cur.sky[3], t));
   gfx.sky = sky;
 
   const ground = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
-  ground.addColorStop(0, th.ground[0]);
-  ground.addColorStop(0.5, th.ground[1]);
-  ground.addColorStop(1, th.ground[2]);
+  ground.addColorStop(0, mixHex(prev.ground[0], cur.ground[0], t));
+  ground.addColorStop(0.5, mixHex(prev.ground[1], cur.ground[1], t));
+  ground.addColorStop(1, mixHex(prev.ground[2], cur.ground[2], t));
   gfx.ground = ground;
+
+  gfx.sun = mixHex(prev.sun, cur.sun, t);
+  gfx.line = mixHex(prev.line, cur.line, t);
 }
+let themeMix = 1, themeFrom = 0;
+const mixHex = (a, b, t) => {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round(lerp(pa >> 16 & 255, pb >> 16 & 255, t));
+  const g = Math.round(lerp(pa >> 8 & 255, pb >> 8 & 255, t));
+  const bl = Math.round(lerp(pa & 255, pb & 255, t));
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1);
+};
 
 /* ============ 状态 ============ */
 const GRAV = 2600;
@@ -844,11 +858,11 @@ const WINGS = [
 ];
 
 const THEMES = [
-  { name: '晴天校园', sky: ['#3f74b8', '#7fb2e8', '#bcd9f2', '#eaf5fb'], sun: '#ffe08a', line: '#d9c9a8', weather: 'none', ground: ['#9a8a76', '#6e6150', '#463c30'] },
-  { name: '黄昏校园', sky: ['#3a4a70', '#c46a5a', '#e8a06a', '#f6d8a8'], sun: '#ffc078', line: '#e8d0a0', weather: 'none', ground: ['#8a7660', '#5f5040', '#3a3028'] },
-  { name: '夜晚校园', sky: ['#0a1228', '#16264a', '#2a3f70', '#4a5a8a'], sun: '#cfd8ff', line: '#b8c0d8', weather: 'star', ground: ['#3a3f4a', '#272b34', '#16181f'] },
-  { name: '雨天校园', sky: ['#3a4a5a', '#5a6a78', '#7a8a96', '#a8b8c0'], sun: '#dfe8ee', line: '#c8d0d8', weather: 'rain', ground: ['#5a5f66', '#3f434a', '#282b30'] },
-  { name: '雪天校园', sky: ['#8aa8c0', '#b8d0e0', '#d8e8f0', '#f0f8fc'], sun: '#ffffff', line: '#e8e4da', weather: 'snow', ground: ['#e8e4da', '#b8b4aa', '#78766e'] }
+  { name: '春日校园', sky: ['#3f74b8', '#7fb2e8', '#bcd9f2', '#eaf5fb'], sun: '#ffe08a', line: '#d9c9a8', weather: 'none', season: 'spring', ground: ['#9a8a76', '#6e6150', '#463c30'] },
+  { name: '秋日校园', sky: ['#3a4a70', '#c46a5a', '#e8a06a', '#f6d8a8'], sun: '#ffc078', line: '#e8d0a0', weather: 'none', season: 'autumn', ground: ['#8a7660', '#5f5040', '#3a3028'] },
+  { name: '夏夜校园', sky: ['#0a1228', '#16264a', '#2a3f70', '#4a5a8a'], sun: '#cfd8ff', line: '#b8c0d8', weather: 'star', season: 'night', ground: ['#3a3f4a', '#272b34', '#16181f'] },
+  { name: '雨季校园', sky: ['#3a4a5a', '#5a6a78', '#7a8a96', '#a8b8c0'], sun: '#dfe8ee', line: '#c8d0d8', weather: 'rain', season: 'summer', ground: ['#5a5f66', '#3f434a', '#282b30'] },
+  { name: '冬日校园', sky: ['#8aa8c0', '#b8d0e0', '#d8e8f0', '#f0f8fc'], sun: '#ffffff', line: '#e8e4da', weather: 'snow', season: 'winter', ground: ['#e8e4da', '#b8b4aa', '#78766e'] }
 ];
 const themeNow = () => THEMES[G.themeIdx % THEMES.length];
 
@@ -1112,6 +1126,7 @@ function reset() {
   G.dragonT = 0; G.dragonTimer = 30; G.fireCd = 0; G.doubleT = 0; G.doubleTimer = 20;
   G.dashT = 0; G.dashTimer = 24;
   G.countT = 0; G.campusFade = 0;
+  themeMix = 1; themeFrom = 0;
   if (ui.btnFire) ui.btnFire.classList.add('hidden');
   jumpHeld = false;
   groundOffset = 0;
@@ -1267,7 +1282,9 @@ function updatePlaying(dt) {
   // 关卡主题：每 500m 换一张地图
   const level = Math.floor(G.dist / 500);
   if (level !== G.themeIdx) {
+    themeFrom = G.themeIdx;
     G.themeIdx = level;
+    themeMix = 0;
     applyTheme();
     resetProps();
     resetWeather();
@@ -1487,18 +1504,19 @@ function drawSun() {
   const cy = GROUND_Y * 0.40;
   const r = 96 * U;
   const th = themeNow();
+  const sunC = gfx.sun || th.sun;
 
   const g = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r * 2.4);
-  g.addColorStop(0, hexA(th.sun, 0.55));
-  g.addColorStop(0.35, hexA(th.sun, 0.22));
-  g.addColorStop(1, hexA(th.sun, 0));
+  g.addColorStop(0, hexA(sunC, 0.55));
+  g.addColorStop(0.35, hexA(sunC, 0.22));
+  g.addColorStop(1, hexA(sunC, 0));
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(cx, cy, r * 2.4, 0, Math.PI * 2); ctx.fill();
 
   const sg = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
   sg.addColorStop(0, '#fffbe8');
-  sg.addColorStop(0.6, th.sun);
-  sg.addColorStop(1, hexA(th.sun, 0));
+  sg.addColorStop(0.6, sunC);
+  sg.addColorStop(1, hexA(sunC, 0));
   ctx.fillStyle = sg;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 }
@@ -1651,13 +1669,14 @@ function drawGround() {
   }
 
   // 地平线柔和高光
-  ctx.strokeStyle = hexA(th.line, 0.55);
+  const lineC = gfx.line || th.line;
+  ctx.strokeStyle = hexA(lineC, 0.55);
   ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.moveTo(0, GROUND_Y); ctx.lineTo(VW, GROUND_Y); ctx.stroke();
 
   const sp = clamp((G.speed - 520) / 300, 0, 1);
   if (sp > 0.02) {
-    ctx.strokeStyle = hexA(th.line, 0.10 * sp);
+    ctx.strokeStyle = hexA(lineC, 0.10 * sp);
     ctx.lineWidth = 2;
     for (let i = 0; i < 12; i++) {
       const yy = GROUND_Y + 6 + hash(i, 3, 7) * 34;
@@ -2541,10 +2560,19 @@ const TEAL_D = '#3d7a72';
 const TEAL_L = '#8ac9bf';
 const LANDMARKS = ['stone', 'gate', 'pillar', 'zhonghe', 'library', 'yifu'];
 const PROP_KINDS = ['lamp', 'tree', 'flag', 'bench', 'bush', 'stone', 'gate', 'pillar', 'zhonghe', 'library', 'yifu'];
+// 树冠配色（按季节）
+const SEASON_TREE = {
+  spring: ['#7cc24f', '#549b3c'],
+  summer: ['#4f8a46', '#3b6b34'],
+  autumn: ['#e09a34', '#b8621f'],
+  night:  ['#2f5a44', '#24452f'],
+  winter: ['#dfeaf0', '#ffffff']
+};
 function makeProp() {
   const kind = pick(PROP_KINDS);
   const landmark = LANDMARKS.indexOf(kind) >= 0;
-  return { kind, s: 1, h: landmark ? rand(130, 200) * U : rand(26, 70) * U };
+  const tallTree = kind === 'tree';
+  return { kind, s: 1, h: landmark ? rand(130, 200) * U : tallTree ? rand(76, 140) * U : rand(26, 70) * U };
 }
 function resetWeather() {
   weather.length = 0;
@@ -2584,10 +2612,11 @@ function drawWeather() {
 
 function drawLighting() {
   const th = themeNow();
+  const sunC = gfx.sun || th.sun;
   // 暖色环境光
   const amb = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-  amb.addColorStop(0, hexA(th.sun, 0.05));
-  amb.addColorStop(1, hexA(th.sun, 0.18));
+  amb.addColorStop(0, hexA(sunC, 0.05));
+  amb.addColorStop(1, hexA(sunC, 0.18));
   ctx.fillStyle = amb;
   ctx.fillRect(0, 0, VW, GROUND_Y);
   // 阳光光束
@@ -2727,13 +2756,38 @@ function drawProps() {
       ctx.beginPath(); ctx.arc(w * 0.16, -h * 0.34, h * 0.1, 0, Math.PI * 2); ctx.fill();
       for (let x = -w / 2 + 8; x < -w * 0.08; x += 12) ctx.fillRect(x, -h * 0.46, 5, h * 0.38);
     } else if (p.kind === 'tree') {
-      // 树
-      ctx.strokeStyle = '#5a4028';
-      ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -p.h * 0.6); ctx.stroke();
-      ctx.fillStyle = '#3f7a3a';
-      for (const [dx, dy, r] of [[-14, -p.h * 0.7, 16], [0, -p.h * 0.9, 18], [14, -p.h * 0.7, 16]]) {
-        ctx.beginPath(); ctx.arc(dx, dy, r, 0, Math.PI * 2); ctx.fill();
+      // 高树，树冠随季节变色
+      const season = themeNow().season || 'summer';
+      const cols = SEASON_TREE[season] || SEASON_TREE.summer;
+      const th = p.h, trunk = th * 0.48;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#6b4a2c';
+      ctx.lineWidth = 3 + th * 0.045;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -trunk); ctx.stroke();
+      if (season === 'winter') {
+        // 冬天：光枝 + 枝头积雪
+        ctx.strokeStyle = '#7a5b3d';
+        ctx.lineWidth = 2.4;
+        for (const [kx, up] of [[-0.55, 0.70], [0.5, 0.76], [-0.28, 0.88], [0.34, 0.93]]) {
+          const bx = kx * th * 0.3, by = -trunk - (up - 0.68) * th * 0.75;
+          ctx.beginPath(); ctx.moveTo(0, -trunk * 0.8); ctx.lineTo(bx, by); ctx.stroke();
+          ctx.fillStyle = cols[1];
+          ctx.beginPath(); ctx.arc(bx, by, 3.6 * U, 0, Math.PI * 2); ctx.fill();
+        }
+      } else {
+        // 层叠锥形树冠
+        const layers = [[0.30, 0.72], [0.24, 0.86], [0.165, 0.99]];
+        for (let i = 0; i < layers.length; i++) {
+          const rw = layers[i][0], up = layers[i][1];
+          const y = -th * up, hw = th * rw, hh = th * 0.3;
+          ctx.fillStyle = i === 2 ? cols[0] : cols[1];
+          ctx.beginPath();
+          ctx.moveTo(-hw, y + hh);
+          ctx.quadraticCurveTo(-hw * 0.92, y + hh * 0.22, 0, y);
+          ctx.quadraticCurveTo(hw * 0.92, y + hh * 0.22, hw, y + hh);
+          ctx.closePath();
+          ctx.fill();
+        }
       }
     } else if (p.kind === 'flag') {
       // 旗杆 + 校旗
@@ -3421,6 +3475,7 @@ function frame(now) {
     while (acc >= STEP && guard++ < 20) { updatePlaying(STEP); acc -= STEP; }
     updateEffects(dt);
     updateBackground(dt, G.speed);
+    if (themeMix < 1) { themeMix = Math.min(1, themeMix + dt / 2.2); applyTheme(); }
     updateWeather(dt);
     updateProps(dt, G.speed);
     updateHUD();
@@ -3488,13 +3543,8 @@ wrapEl.addEventListener('pointerdown', (e) => {
   if (G.state === 'ready') { startGame(); return; }
   if (G.state === 'over') { if (G.overT > 0.9) startGame(); return; }
   if (G.state !== 'playing') return;
-  e.preventDefault();
+  // 跳跃/滑铲只由屏幕按键（或键盘）触发，点画面不再操作角色
   initAudio();
-  const viewH = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-  const yy = e.clientY - ((window.visualViewport && window.visualViewport.offsetTop) || 0);
-  activePointers.set(e.pointerId, yy / viewH > 0.6 ? 'slide' : 'jump');
-  if (yy / viewH > 0.6) syncPointerState();
-  else { syncPointerState(); jump(); }
 });
 function endPointer(e) {
   if (!activePointers.has(e.pointerId)) return;
