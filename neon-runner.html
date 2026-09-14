@@ -116,7 +116,7 @@
   #touch{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;
          padding:0 16px calc(8px + env(safe-area-inset-bottom,0px));gap:16px;}
   .tbtn{
-    flex:0 0 auto;width:72px;height:72px;border-radius:50%;display:grid;place-items:center;
+    position:relative;flex:0 0 auto;width:72px;height:72px;border-radius:50%;display:grid;place-items:center;
     font-size:13px;font-weight:700;letter-spacing:.08em;color:#eafcff;
     text-shadow:0 1px 4px rgba(0,0,0,.65);
     background:rgba(120,240,255,.26);border:1.5px solid rgba(255,255,255,.38);
@@ -163,6 +163,21 @@
   #nameInput:focus{border-color:rgba(57,246,255,.75);box-shadow:0 0 14px rgba(57,246,255,.25);}
   .rowme{background:rgba(126,249,255,.12);border-color:rgba(126,249,255,.45);}
   .rank{flex:0 0 30px;text-align:center;font-weight:800;color:#ffd93b;font-size:14px;}
+  .setgrid{display:grid;gap:10px;margin:16px 0 6px;text-align:left;}
+  .setrow{display:flex;align-items:center;gap:10px;font-size:13px;color:#cfeaff;}
+  .setrow span{flex:0 0 76px;color:#8fb6cc;letter-spacing:.06em;}
+  .setrow input[type=range]{
+    flex:1;height:26px;-webkit-appearance:none;appearance:none;background:transparent;
+  }
+  .setrow input[type=range]::-webkit-slider-runnable-track{
+    height:6px;border-radius:999px;background:rgba(57,246,255,.22);
+  }
+  .setrow input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:20px;height:20px;border-radius:50%;margin-top:-7px;
+    background:linear-gradient(180deg,#bff4ff,#2bd2ff);box-shadow:0 0 10px rgba(43,210,255,.6);
+  }
+  .setrow input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:rgba(57,246,255,.22)}
+  .setrow input[type=range]::-moz-range-thumb{width:20px;height:20px;border:0;border-radius:50%;background:#2bd2ff}
   /* 手机竖屏拦截：只能横屏操作 */
   #rotateGate{
     display:none;position:absolute;inset:0;z-index:40;pointer-events:auto;
@@ -285,6 +300,7 @@
       <div id="btnSound" class="icon" title="声音 (M)">🔊</div>
       <div id="btnShop" class="icon" title="商城">🛒</div>
       <div id="btnBoard" class="icon" title="排行榜">🏆</div>
+      <div id="btnSet" class="icon" title="按键设置">⚙️</div>
     </div>
   </div>
 
@@ -295,6 +311,25 @@
       <div id="boardList" class="shoplist"></div>
       <div class="btnrow">
         <button id="btnBoardClose" class="btn ghost">返回</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setScreen" class="screen hidden">
+    <div class="card shop-card">
+      <h1 class="title" style="font-size:30px">按键设置</h1>
+      <p class="tip" style="margin:10px 0 0">拖动滑块自由调整按键大小和位置</p>
+      <div class="setgrid">
+        <div class="setrow"><span>跳键大小</span><input id="setJSize" type="range" min="44" max="140" step="2"></div>
+        <div class="setrow"><span>跳键左右</span><input id="setJX" type="range" min="-60" max="180" step="2"></div>
+        <div class="setrow"><span>跳键上下</span><input id="setJY" type="range" min="0" max="260" step="2"></div>
+        <div class="setrow"><span>滑键大小</span><input id="setSSize" type="range" min="44" max="140" step="2"></div>
+        <div class="setrow"><span>滑键左右</span><input id="setSX" type="range" min="-60" max="180" step="2"></div>
+        <div class="setrow"><span>滑键上下</span><input id="setSY" type="range" min="0" max="260" step="2"></div>
+      </div>
+      <div class="btnrow">
+        <button id="btnSetReset" class="btn ghost">恢复默认</button>
+        <button id="btnSetClose" class="btn">完成</button>
       </div>
     </div>
   </div>
@@ -1148,6 +1183,7 @@ function startGame() {
   ui.pause.classList.add('hidden');
   ui.win.classList.add('hidden');
   ui.board.classList.add('hidden');
+  ui.set.classList.add('hidden');
   ui.btnPause.textContent = '❚❚';
   ui.hint.style.opacity = '0';
 }
@@ -3246,6 +3282,9 @@ const ui = {
   touch: document.getElementById('touch'),
   shop: document.getElementById('shopScreen'),
   win: document.getElementById('winScreen'),
+  set: document.getElementById('setScreen'),
+  tJump: document.getElementById('tJump'),
+  tSlide: document.getElementById('tSlide'),
   board: document.getElementById('boardScreen'),
   boardList: document.getElementById('boardList'),
   boardNote: document.getElementById('boardNote'),
@@ -3420,6 +3459,45 @@ async function openBoard() {
 }
 function closeBoard() { ui.board.classList.add('hidden'); }
 
+/* ---------- 按键大小 / 位置自定义（保存到本地） ---------- */
+const BTN_DEFAULT = { jSize: 72, jX: 0, jY: 8, sSize: 72, sX: 0, sY: 8 };
+const btnCfg = Object.assign({}, BTN_DEFAULT, save.btnCfg || {});
+function applyBtnCfg() {
+  const j = ui.tJump, s = ui.tSlide;
+  if (j) {
+    j.style.width = btnCfg.jSize + 'px';
+    j.style.height = btnCfg.jSize + 'px';
+    j.style.fontSize = Math.round(btnCfg.jSize * 0.18) + 'px';
+    j.style.left = btnCfg.jX + 'px';
+    j.style.bottom = btnCfg.jY + 'px';
+  }
+  if (s) {
+    s.style.width = btnCfg.sSize + 'px';
+    s.style.height = btnCfg.sSize + 'px';
+    s.style.fontSize = Math.round(btnCfg.sSize * 0.18) + 'px';
+    s.style.right = btnCfg.sX + 'px';
+    s.style.bottom = btnCfg.sY + 'px';
+  }
+  save.btnCfg = btnCfg;
+  saveStore();
+}
+const SET_MAP = [['setJSize', 'jSize'], ['setJX', 'jX'], ['setJY', 'jY'],
+                 ['setSSize', 'sSize'], ['setSX', 'sX'], ['setSY', 'sY']];
+function syncSetUI() {
+  for (const pair of SET_MAP) {
+    const el = document.getElementById(pair[0]);
+    if (el) el.value = String(btnCfg[pair[1]]);
+  }
+}
+SET_MAP.forEach((pair) => {
+  const el = document.getElementById(pair[0]);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    btnCfg[pair[1]] = Number(el.value) || 0;
+    applyBtnCfg();
+  });
+});
+
 /* ---------- 手机横屏限制 ---------- */
 const isCoarse = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 function tryLockLandscape() {
@@ -3591,6 +3669,18 @@ ui.btnPause.addEventListener('click', () => togglePause());
 ui.btnShop.addEventListener('click', openShop);
 ui.btnBoard.addEventListener('click', openBoard);
 ui.btnBoardClose.addEventListener('click', closeBoard);
+document.getElementById('btnSet').addEventListener('click', () => {
+  if (G.state === 'playing') togglePause(true);
+  syncSetUI();
+  ui.set.classList.remove('hidden');
+});
+document.getElementById('btnSetClose').addEventListener('click', () => ui.set.classList.add('hidden'));
+document.getElementById('btnSetReset').addEventListener('click', () => {
+  Object.assign(btnCfg, BTN_DEFAULT);
+  applyBtnCfg();
+  syncSetUI();
+});
+applyBtnCfg();
 ui.nameInput.value = myName();
 ui.nameInput.addEventListener('input', () => setMyName(ui.nameInput.value));
 ui.btnShopClose.addEventListener('click', closeShop);
