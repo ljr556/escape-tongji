@@ -209,11 +209,17 @@
   @media (hover: none) {
     .icon:hover,.btn:hover{transform:none;}
   }
+  /* 触屏：跳在左、滑在右，喷火按钮上移到滑键上方避免重叠 */
+  @media (pointer: coarse) {
+    #tJump{order:1;}
+    #tSlide{order:2;}
+    #btnFire{right:20px;bottom:calc(92px + env(safe-area-inset-bottom,0px));}
+  }
   @media (orientation: landscape) and (pointer: coarse) {
     #touch{padding:0 20px calc(6px + env(safe-area-inset-bottom,0px));}
-    #tJump{order:2;width:78px;height:78px;}
-    #tSlide{order:1;width:78px;height:78px;}
-    #btnFire{right:130px;bottom:16px;}
+    #tJump{order:1;width:78px;height:78px;}
+    #tSlide{order:2;width:78px;height:78px;}
+    #btnFire{right:106px;bottom:16px;}
   }
   /* 矮屏（横屏手机）压缩开始卡片，保证「开始游戏」始终可见可点 */
   @media (max-height: 520px) {
