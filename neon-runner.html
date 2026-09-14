@@ -163,6 +163,22 @@
   #nameInput:focus{border-color:rgba(57,246,255,.75);box-shadow:0 0 14px rgba(57,246,255,.25);}
   .rowme{background:rgba(126,249,255,.12);border-color:rgba(126,249,255,.45);}
   .rank{flex:0 0 30px;text-align:center;font-weight:800;color:#ffd93b;font-size:14px;}
+  /* 手机竖屏拦截：只能横屏操作 */
+  #rotateGate{
+    display:none;position:absolute;inset:0;z-index:40;pointer-events:auto;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:radial-gradient(80% 60% at 50% 40%,rgba(24,10,44,.96),rgba(6,2,14,.985));
+    text-align:center;padding:24px;
+  }
+  #rotateGate .rg-icon{font-size:62px;animation:rot 1.8s ease-in-out infinite}
+  #rotateGate .rg-title{font-size:26px;font-weight:900;letter-spacing:.08em;
+    background:linear-gradient(180deg,#ffffff,#7ef9ff 50%,#ff3ea5);
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  #rotateGate .rg-sub{font-size:13px;color:#8fb6cc;letter-spacing:.1em}
+  @keyframes rot{0%,40%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotateGate{display:flex}
+  }
   .stab{
     font:inherit;font-weight:700;font-size:15px;color:#cfeaff;cursor:pointer;
     padding:8px 22px;border-radius:999px;border:1px solid rgba(57,246,255,.25);background:rgba(57,246,255,.06);
@@ -286,6 +302,12 @@
   <div id="hint">空格 / 点击屏幕 跳跃 · 长按下方 滑铲</div>
 
   <div id="dashTag" class="dashtag hidden">⚡ 冲刺 <span id="dashM">0</span>m</div>
+
+  <div id="rotateGate">
+    <div class="rg-icon">📱</div>
+    <div class="rg-title">请横屏游玩</div>
+    <div class="rg-sub">把手机横过来即可继续</div>
+  </div>
 
   <div id="touch" class="layer hidden">
     <div id="tJump" class="tbtn">跳</div>
@@ -1102,6 +1124,7 @@ function reset() {
 
 function startGame() {
   initAudio();
+  tryLockLandscape();
   reset();
   G.state = 'countdown';
   G.countT = 3.6;
@@ -3343,6 +3366,29 @@ async function openBoard() {
 }
 function closeBoard() { ui.board.classList.add('hidden'); }
 
+/* ---------- 手机横屏限制 ---------- */
+const isCoarse = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+function tryLockLandscape() {
+  if (!isCoarse()) return;                 // 电脑不受影响
+  try {
+    const el = document.documentElement;
+    const goFs = el && el.requestFullscreen && !document.fullscreenElement
+      ? el.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve();
+    Promise.resolve(goFs).then(() => {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+    }).catch(() => {});
+  } catch (e) {}
+}
+function checkOrientation() {
+  // 竖屏时自动暂停，配合 CSS 拦截层，做到「只能横屏操作」
+  if (!isCoarse()) return;
+  try {
+    if (window.innerHeight > window.innerWidth && G.state === 'playing') togglePause(true);
+  } catch (e) {}
+}
+
 /* ============ 循环 ============ */
 const STEP = 1 / 120;
 let last = performance.now();
@@ -3522,6 +3568,8 @@ if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ui.touc
 
 window.addEventListener('resize', onViewportChange);
 window.addEventListener('orientationchange', () => setTimeout(onViewportChange, 120));
+window.addEventListener('resize', checkOrientation);
+window.addEventListener('orientationchange', () => setTimeout(checkOrientation, 180));
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', onViewportChange);
   window.visualViewport.addEventListener('scroll', onViewportChange);
